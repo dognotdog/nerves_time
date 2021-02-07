@@ -102,9 +102,10 @@ defmodule NervesTime.Ntpd do
   @impl true
   def init(_args) do
     ntp_servers = Application.get_env(:nerves_time, :servers, @default_ntp_servers)
+    time_sync_handlers = Application.get_env(:nerves_time, :time_sync_handlers, [])
 
     state =
-      %State{servers: ntp_servers}
+      %State{servers: ntp_servers, sync_handlers: time_sync_handlers}
       |> prep_ntpd_start()
       |> schedule_ntpd_start()
 
@@ -255,7 +256,7 @@ defmodule NervesTime.Ntpd do
     server_args = Enum.flat_map(servers, fn s -> ["-p", s] end)
 
     # Add "-d" and enable log_output below for more verbose prints from ntpd.
-    args = ["-n", "-S", ntpd_script_path | server_args]
+    args = ["-dd", "-n", "-S", ntpd_script_path | server_args]
 
     _ = Logger.debug("Starting #{ntpd_path} with: #{inspect(args)}")
 
@@ -269,7 +270,7 @@ defmodule NervesTime.Ntpd do
     %{state | daemon: pid, synchronized?: false}
   end
 
-  defp handle_time_sync(stratum, state = %State{sync_handlers: handlers}) when stratum <= 4 do
+  defp handle_time_sync(stratum, _state = %State{sync_handlers: handlers}) when stratum <= 4 do
     # call configured time update handlers, eg. RTCs via add_time_sync_handler
     for handler <- handlers do
       handler.(stratum)
